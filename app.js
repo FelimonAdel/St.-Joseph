@@ -90,6 +90,10 @@
     $("syncStatus").textContent = txt;
   }
 
+  function normAr(s) {
+    return String(s || "").trim().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
+  }
+
   function waUrl(phone, text) {
     const clean = String(phone || "").replace(/[^0-9]/g, "");
     if (!clean) return "";
@@ -202,18 +206,13 @@
     `;
   }
 
-  // 2. الحضور (Attendance — Offline Ready)
+  // 2. الحضور (Attendance — Instant 0ms UI + Background Sync)
   function renderAttendance(root) {
-    let list = state.boys || [];
-    if (attFilter === "present") list = list.filter((b) => b.presentLastFriday);
-    if (attFilter === "absent") list = list.filter((b) => !b.presentLastFriday);
-    if (searchQuery) list = list.filter((b) => b.name.includes(searchQuery));
-
     root.innerHTML = `
       <div class="card">
         <div class="card-title">
           <span>✅ كشف حضور: ${state.fridayLabel || "الجمعة"}</span>
-          <span class="badge badge-blue">${state.boys.filter((b) => b.presentLastFriday).length} / ${state.boys.length}</span>
+          <span id="attBadge" class="badge badge-blue">${state.boys.filter((b) => b.presentLastFriday).length} / ${state.boys.length}</span>
         </div>
         <input class="search-box" id="attSearch" placeholder="🔍 ابحث باسم الولد..." value="${searchQuery}" />
         <div class="pills">
@@ -225,69 +224,86 @@
       <div id="attList"></div>
     `;
 
-    $("attSearch").oninput = (e) => { searchQuery = e.target.value; renderAttendance(root); };
-    root.querySelectorAll(".pill").forEach((p) => {
-      p.onclick = () => { attFilter = p.dataset.f; renderAttendance(root); };
-    });
+    function drawAttList() {
+      let list = state.boys || [];
+      if (attFilter === "present") list = list.filter((b) => b.presentLastFriday);
+      if (attFilter === "absent") list = list.filter((b) => !b.presentLastFriday);
+      if (searchQuery) {
+        const q = normAr(searchQuery);
+        list = list.filter((b) => normAr(b.name).includes(q));
+      }
+      $("attBadge").textContent = `${state.boys.filter((b) => b.presentLastFriday).length} / ${state.boys.length}`;
 
-    const listEl = $("attList");
-    listEl.innerHTML = list.map((b) => `
-      <div class="boy-card">
-        <div class="boy-top">
-          ${avatarHtml(b)}
-          <div class="boy-info">
-            <p class="boy-name">${b.name}</p>
-            <div class="boy-meta">
-              <span>📍 ${b.area || "—"}</span>
-              <span>• حضور سنوي: ${b.annualCount}</span>
+      const listEl = $("attList");
+      listEl.innerHTML = list.map((b) => `
+        <div class="boy-card">
+          <div class="boy-top">
+            ${avatarHtml(b)}
+            <div class="boy-info">
+              <p class="boy-name">${b.name}</p>
+              <div class="boy-meta">
+                <span>📍 ${b.area || "—"}</span>
+                <span>• حضور سنوي: ${b.annualCount}</span>
+              </div>
             </div>
           </div>
+          <div class="boy-actions">
+            <button class="toggle-btn ${b.presentLastFriday ? "present" : ""}" data-id="${b.id}" data-kind="present">
+              ${b.presentLastFriday ? "✓ حضر الخدمة" : "○ غائب"}
+            </button>
+            <button class="toggle-btn ${b.massLastFriday ? "mass-on" : ""}" data-id="${b.id}" data-kind="mass">
+              ${b.massLastFriday ? "⛪ حضر القداس" : "○ القداس"}
+            </button>
+          </div>
         </div>
-        <div class="boy-actions">
-          <button class="toggle-btn ${b.presentLastFriday ? "present" : ""}" data-id="${b.id}" data-kind="present">
-            ${b.presentLastFriday ? "✓ حضر الخدمة" : "○ غائب"}
-          </button>
-          <button class="toggle-btn ${b.massLastFriday ? "mass-on" : ""}" data-id="${b.id}" data-kind="mass">
-            ${b.massLastFriday ? "⛪ حضر القداس" : "○ القداس"}
-          </button>
-        </div>
-      </div>
-    `).join("");
+      `).join("") || `<div class="card" style="text-align:center;color:var(--muted);">لا توجد نتائج مطابقة</div>`;
 
-    listEl.querySelectorAll(".toggle-btn").forEach((btn) => {
-      btn.onclick = async () => {
-        const boy = state.boys.find((x) => x.id === Number(btn.dataset.id));
-        if (!boy) return;
-        if (btn.dataset.kind === "present") {
-          boy.presentLastFriday = !boy.presentLastFriday;
-        } else {
-          boy.massLastFriday = !boy.massLastFriday;
-        }
-        await window.LocalDB.setState("appData", state);
-        await window.AppAPI.queueOrSend({
-          type: "attendance",
-          boyName: boy.name,
-          present: boy.presentLastFriday,
-          mass: boy.massLastFriday,
-          servant: currentServant
-        });
-        await updateSyncBar();
-        renderAttendance(root);
+      listEl.querySelectorAll(".toggle-btn").forEach((btn) => {
+        btn.onclick = () => {
+          const boy = state.boys.find((x) => x.id === Number(btn.dataset.id));
+          if (!boy) return;
+          if (btn.dataset.kind === "present") {
+            boy.presentLastFriday = !boy.presentLastFriday;
+            btn.classList.toggle("present", boy.presentLastFriday);
+            btn.textContent = boy.presentLastFriday ? "✓ حضر الخدمة" : "○ غائب";
+          } else {
+            boy.massLastFriday = !boy.massLastFriday;
+            btn.classList.toggle("mass-on", boy.massLastFriday);
+            btn.textContent = boy.massLastFriday ? "⛪ حضر القداس" : "○ القداس";
+          }
+          $("attBadge").textContent = `${state.boys.filter((b) => b.presentLastFriday).length} / ${state.boys.length}`;
+
+          // حفظ ومزامنة في الخلفية بدون تأخير الواجهة
+          window.LocalDB.setState("appData", state).then(() =>
+            window.AppAPI.queueOrSend({
+              type: "attendance",
+              boyName: boy.name,
+              present: boy.presentLastFriday,
+              mass: boy.massLastFriday,
+              servant: currentServant
+            })
+          ).then(updateSyncBar);
+        };
+      });
+    }
+
+    $("attSearch").oninput = (e) => { searchQuery = e.target.value; drawAttList(); };
+    root.querySelectorAll(".pill").forEach((p) => {
+      p.onclick = () => {
+        root.querySelectorAll(".pill").forEach((x) => x.classList.remove("active"));
+        p.classList.add("active");
+        attFilter = p.dataset.f;
+        drawAttList();
       };
     });
+    drawAttList();
   }
 
-  // 3. الافتقاد (WhatsApp + Filters)
+  // 3. الافتقاد (WhatsApp + Filters — Smooth Search)
   function renderFollowup(root) {
-    let list = (state.boys || []).filter((b) => !b.presentLastFriday);
-    if (followFilter === "urgent") list = list.filter((b) => b.monthlyAbsences >= 3);
-    if (followFilter === "two") list = list.filter((b) => b.missedTwoFridays);
-    if (followFilter === "mine") list = list.filter((b) => b.servant === currentServant);
-    if (searchQuery) list = list.filter((b) => b.name.includes(searchQuery));
-
     root.innerHTML = `
       <div class="card">
-        <div class="card-title">💬 الافتقاد السريع (غائبين: ${list.length})</div>
+        <div class="card-title" id="folTitle">💬 الافتقاد السريع</div>
         <label>رسالة الأم (استخدم {الاسم})</label>
         <input id="tplMom" value="${getMsg("mother")}" />
         <label>رسالة الولد (استخدم {الاسم})</label>
@@ -303,76 +319,101 @@
       <div id="folList"></div>
     `;
 
-    $("tplMom").onchange = (e) => { localStorage.setItem("msg_mother", e.target.value); renderFollowup(root); };
-    $("tplBoy").onchange = (e) => { localStorage.setItem("msg_boy", e.target.value); renderFollowup(root); };
-    $("folSearch").oninput = (e) => { searchQuery = e.target.value; renderFollowup(root); };
-    root.querySelectorAll(".pill").forEach((p) => {
-      p.onclick = () => { followFilter = p.dataset.f; renderFollowup(root); };
-    });
+    function drawFolList() {
+      let list = (state.boys || []).filter((b) => !b.presentLastFriday);
+      if (followFilter === "urgent") list = list.filter((b) => b.monthlyAbsences >= 3);
+      if (followFilter === "two") list = list.filter((b) => b.missedTwoFridays);
+      if (followFilter === "mine") list = list.filter((b) => b.servant === currentServant);
+      if (searchQuery) {
+        const q = normAr(searchQuery);
+        list = list.filter((b) => normAr(b.name).includes(q));
+      }
+      $("folTitle").textContent = `💬 الافتقاد السريع (غائبين: ${list.length})`;
 
-    $("folList").innerHTML = list.map((b) => {
-      const momPhone = b.momPhone || b.extraPhone || b.dadPhone;
-      const momLink = waUrl(momPhone, getMsg("mother").replaceAll("{الاسم}", b.firstName));
-      const boyLink = waUrl(b.boyPhone, getMsg("boy").replaceAll("{الاسم}", b.firstName));
-      const prio = b.monthlyAbsences >= 3
-        ? `<span class="badge badge-red">🔴 URGENT (${b.monthlyAbsences})</span>`
-        : b.monthlyAbsences === 2
-        ? `<span class="badge badge-amber">🟡 متابعة (2)</span>`
-        : `<span class="badge badge-green">🟢 عادي</span>`;
+      $("folList").innerHTML = list.map((b) => {
+        const momPhone = b.momPhone || b.extraPhone || b.dadPhone;
+        const momLink = waUrl(momPhone, getMsg("mother").replaceAll("{الاسم}", b.firstName));
+        const boyLink = waUrl(b.boyPhone, getMsg("boy").replaceAll("{الاسم}", b.firstName));
+        const prio = b.monthlyAbsences >= 3
+          ? `<span class="badge badge-red">🔴 URGENT (${b.monthlyAbsences})</span>`
+          : b.monthlyAbsences === 2
+          ? `<span class="badge badge-amber">🟡 متابعة (2)</span>`
+          : `<span class="badge badge-green">🟢 عادي</span>`;
 
-      return `
-        <div class="boy-card">
-          <div class="boy-top">
-            ${avatarHtml(b)}
-            <div class="boy-info">
-              <p class="boy-name">${b.name}</p>
-              <div class="boy-meta">
-                ${prio}
-                ${b.missedTwoFridays ? `<span class="badge badge-red">⚠️ غاب جمعتين</span>` : ""}
-                ${b.servant ? `<span class="badge badge-blue">👤 ${b.servant}</span>` : ""}
-              </div>
-            </div>
-          </div>
-          <div class="boy-actions">
-            ${momLink ? `<a class="btn btn-emerald btn-sm" href="${momLink}" target="_blank">💬 واتساب الأم</a>` : ""}
-            ${boyLink ? `<a class="btn btn-blue btn-sm" href="${boyLink}" target="_blank">📱 واتساب الولد</a>` : ""}
-            ${b.mapUrl ? `<a class="btn btn-outline btn-sm" href="${b.mapUrl}" target="_blank">📍 اللوكيشن</a>` : ""}
-            <button class="btn btn-amber btn-sm" onclick="window.openBoyProfile(${b.id})">📝 تقرير</button>
-          </div>
-        </div>
-      `;
-    }).join("") || `<div class="card" style="text-align:center;color:var(--muted);">🎉 لا يوجد غياب في هذا التصنيف!</div>`;
-  }
-
-  // 4. دليل الأولاد وملفاتهم
-  function renderBoys(root) {
-    let list = state.boys || [];
-    if (searchQuery) list = list.filter((b) => b.name.includes(searchQuery) || (b.area && b.area.includes(searchQuery)));
-
-    root.innerHTML = `
-      <div class="card">
-        <div class="card-title">👦 دليل الأولاد (${list.length})</div>
-        <input id="boySearch" placeholder="🔍 ابحث بالاسم أو المنطقة..." value="${searchQuery}" />
-      </div>
-      <div>
-        ${list.map((b) => `
-          <div class="boy-card" style="cursor:pointer;" onclick="window.openBoyProfile(${b.id})">
+        return `
+          <div class="boy-card">
             <div class="boy-top">
               ${avatarHtml(b)}
               <div class="boy-info">
                 <p class="boy-name">${b.name}</p>
                 <div class="boy-meta">
-                  <span>📍 ${b.area || "—"}</span>
-                  ${b.servant ? `<span>• 👤 ${b.servant}</span>` : ""}
+                  ${prio}
+                  ${b.missedTwoFridays ? `<span class="badge badge-red">⚠️ غاب جمعتين</span>` : ""}
+                  ${b.servant ? `<span class="badge badge-blue">👤 ${b.servant}</span>` : ""}
                 </div>
               </div>
-              <span style="color:var(--primary);font-weight:800;">عرض ←</span>
+            </div>
+            <div class="boy-actions">
+              ${momLink ? `<a class="btn btn-emerald btn-sm" href="${momLink}" target="_blank">💬 واتساب الأم</a>` : ""}
+              ${boyLink ? `<a class="btn btn-blue btn-sm" href="${boyLink}" target="_blank">📱 واتساب الولد</a>` : ""}
+              ${b.mapUrl ? `<a class="btn btn-outline btn-sm" href="${b.mapUrl}" target="_blank">📍 اللوكيشن</a>` : ""}
+              <button class="btn btn-amber btn-sm" onclick="window.openBoyProfile(${b.id})">📝 تقرير</button>
             </div>
           </div>
-        `).join("")}
+        `;
+      }).join("") || `<div class="card" style="text-align:center;color:var(--muted);">🎉 لا يوجد غياب في هذا التصنيف!</div>`;
+    }
+
+    $("tplMom").onchange = (e) => { localStorage.setItem("msg_mother", e.target.value); drawFolList(); };
+    $("tplBoy").onchange = (e) => { localStorage.setItem("msg_boy", e.target.value); drawFolList(); };
+    $("folSearch").oninput = (e) => { searchQuery = e.target.value; drawFolList(); };
+    root.querySelectorAll(".pill").forEach((p) => {
+      p.onclick = () => {
+        root.querySelectorAll(".pill").forEach((x) => x.classList.remove("active"));
+        p.classList.add("active");
+        followFilter = p.dataset.f;
+        drawFolList();
+      };
+    });
+    drawFolList();
+  }
+
+  // 4. دليل الأولاد وملفاتهم (Smooth Search)
+  function renderBoys(root) {
+    root.innerHTML = `
+      <div class="card">
+        <div class="card-title" id="boysTitle">👦 دليل الأولاد</div>
+        <input id="boySearch" placeholder="🔍 ابحث بالاسم أو المنطقة..." value="${searchQuery}" />
       </div>
+      <div id="boysList"></div>
     `;
-    $("boySearch").oninput = (e) => { searchQuery = e.target.value; renderBoys(root); };
+
+    function drawBoysList() {
+      let list = state.boys || [];
+      if (searchQuery) {
+        const q = normAr(searchQuery);
+        list = list.filter((b) => normAr(b.name).includes(q) || normAr(b.area).includes(q));
+      }
+      $("boysTitle").textContent = `👦 دليل الأولاد (${list.length})`;
+      $("boysList").innerHTML = list.map((b) => `
+        <div class="boy-card" style="cursor:pointer;" onclick="window.openBoyProfile(${b.id})">
+          <div class="boy-top">
+            ${avatarHtml(b)}
+            <div class="boy-info">
+              <p class="boy-name">${b.name}</p>
+              <div class="boy-meta">
+                <span>📍 ${b.area || "—"}</span>
+                ${b.servant ? `<span>• 👤 ${b.servant}</span>` : ""}
+              </div>
+            </div>
+            <span style="color:var(--primary);font-weight:800;">عرض ←</span>
+          </div>
+        </div>
+      `).join("") || `<div class="card" style="text-align:center;color:var(--muted);">لا توجد نتائج مطابقة</div>`;
+    }
+
+    $("boySearch").oninput = (e) => { searchQuery = e.target.value; drawBoysList(); };
+    drawBoysList();
   }
 
   // نافذة ملف الولد + رفع الصورة + إضافة تقرير
