@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1E3A8A" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>أسرة القديس يوسف البار - سنة رابعة</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./assets/app-icon.jpg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <!-- شاشة الدخول -->
+  <section id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-hero">
+        <img src="./assets/st-joseph-hero.jpg" alt="القديس يوسف البار" />
+        <div class="login-hero-overlay">
+          <h1>⛪ أسرة القديس يوسف البار</h1>
+          <p>سنة رابعة — بوابة الخدام والافتقاد</p>
+        </div>
+      </div>
+      <div class="login-body">
+        <div class="verse-box" id="verseBox"></div>
+        <label for="loginServant">اختر اسم الخادم</label>
+        <select id="loginServant"></select>
+        <label for="loginPin">كود الدخول (PIN)</label>
+        <input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="أدخل الكود (الافتراضي: 1111..8888)" />
+        <button id="loginBtn" class="btn btn-primary">دخول للخدمة</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- التطبيق الرئيسي -->
+  <div id="mainApp" class="hidden">
+    <header class="topbar">
+      <div class="topbar-row">
+        <div class="brand">
+          <img src="./assets/app-icon.jpg" alt="أيقونة الأسرة" />
+          <div>
+            <h2>أسرة القديس يوسف البار</h2>
+            <span id="servantGreeting">مرحباً</span>
+          </div>
+        </div>
+        <button id="logoutBtn" class="sync-btn">خروج</button>
+      </div>
+      <div class="sync-bar">
+        <span id="syncStatus">🟢 متصل</span>
+        <button id="syncNowBtn" class="sync-btn">🔄 مزامنة الآن</button>
+      </div>
+    </header>
+
+    <main id="tabContent" class="container"></main>
+
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-tab="home"><span class="ico">🏠</span><span>الرئيسية</span></button>
+      <button class="nav-item" data-tab="attendance"><span class="ico">✅</span><span>الحضور</span></button>
+      <button class="nav-item" data-tab="followup"><span class="ico">💬</span><span>الافتقاد</span></button>
+      <button class="nav-item" data-tab="boys"><span class="ico">👦</span><span>الأولاد</span></button>
+      <button class="nav-item" data-tab="more"><span class="ico">⚙️</span><span>المزيد</span></button>
+    </nav>
+  </div>
+
+  <!-- نافذة ملف الولد -->
+  <div id="modalBackdrop" class="modal-backdrop hidden">
+    <div class="modal-sheet">
+      <div class="modal-head">
+        <h3 id="modalTitle" style="margin:0;font-size:17px;">ملف الولد</h3>
+        <button id="closeModalBtn" class="close-btn">✕</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="./config.js"></script>
+  <script src="./seed_data.js"></script>
+  <script src="./db.js"></script>
+  <script src="./api.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

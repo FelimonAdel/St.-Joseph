@@ -1,0 +1,20 @@
+{
+  "name": "أسرة القديس يوسف البار - سنة رابعة",
+  "short_name": "القديس يوسف",
+  "description": "تطبيق خدمة ومتابعة وافتقاد أسرة القديس يوسف البار - يعمل أونلاين وأوفلاين",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#0F172A",
+  "theme_color": "#1E3A8A",
+  "icons": [
+    {
+      "src": "./assets/app-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
