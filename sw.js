@@ -1,12 +1,13 @@
-const CACHE_NAME = "st-joseph-v3";
+const CACHE_NAME = "st-joseph-v4";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./config.js",
-  "./db.js",
-  "./api.js",
-  "./app.js",
+  "./styles.css?v=4",
+  "./config.js?v=4",
+  "./seed_data.js?v=4",
+  "./db.js?v=4",
+  "./api.js?v=4",
+  "./app.js?v=4",
   "./manifest.json"
 ];
 
@@ -27,22 +28,19 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
-  // Don't cache Google Apps Script API calls
   if (url.hostname.includes("script.google.com") || url.hostname.includes("googleusercontent.com")) {
     return;
   }
+  // Network-first: دائماً يجلب أحدث نسخة عند وجود إنترنت، ويستخدم الكاش عند انقطاع النت
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const networkFetch = fetch(e.request)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
-    })
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.status === 200) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
