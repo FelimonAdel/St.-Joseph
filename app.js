@@ -53,12 +53,30 @@
     await updateSyncBar();
     renderTab();
 
-    // مزامنة تلقائية عند عودة الإنترنت
-    window.addEventListener("online", async () => {
+    // مزامنة تلقائية عند عودة الإنترنت + عند الرجوع للتطبيق + كل 30 ثانية في الخلفية
+    async function autoSyncSilently() {
+      if (!navigator.onLine || !window.AppAPI.getApiUrl()) return;
+      // لا نعيد الرسم أثناء فتح نافذة أو الكتابة في خانة بحث/تقرير
+      const isTyping = document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+      const modalOpen = !$("modalBackdrop").classList.contains("hidden");
       await window.AppAPI.syncQueue();
+      const fresh = await window.AppAPI.loadInitialData();
+      if (fresh.source === "live") {
+        state = fresh.data;
+        await updateSyncBar();
+        if (!isTyping && !modalOpen) renderTab();
+      }
+    }
+
+    window.addEventListener("online", async () => {
+      await autoSyncSilently();
       await updateSyncBar();
     });
     window.addEventListener("offline", updateSyncBar);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") autoSyncSilently();
+    });
+    setInterval(autoSyncSilently, 30000);
   }
 
   async function updateSyncBar() {
